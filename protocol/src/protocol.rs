@@ -1,12 +1,11 @@
-//TODO: Make this a library so that all the libraries have access to this
 
 pub enum ProtocolError{
     MalformedPayload,
     MalformedHeader,
     InvalidHeaderOption,
     InvalidOptionValue
-        
 }
+
 pub enum RequestType{
     Heartbeat,
     Join,
@@ -38,6 +37,7 @@ impl Protocol{
             let Some((key,value)) = header_line.split_once(":") else {
                 return Err(ProtocolError::MalformedHeader);
             };
+
             match key{
                 "request_type" => {
                     match value{
