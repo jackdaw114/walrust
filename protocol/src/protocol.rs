@@ -1,4 +1,5 @@
 
+#[derive(Debug)]
 pub enum ProtocolError{
     MalformedPayload,
     MalformedHeader,
@@ -6,19 +7,22 @@ pub enum ProtocolError{
     InvalidOptionValue
 }
 
+#[derive(Debug)]
 pub enum RequestType{
     Heartbeat,
     Join,
     None
 }
 
+
+#[derive(Debug)]
 pub struct Protocol {
     request_type: RequestType,
     body:String,
 }
 
 impl Protocol{
-    fn header_parser(data: &str) -> Result<Self,ProtocolError>{ // this is a constructor for struct
+    pub fn header_parser(data: &str) -> Result<Self,ProtocolError>{ // this is a constructor for struct
                                                                // Protocol
 
         let mut protocol_constructor = Protocol{
