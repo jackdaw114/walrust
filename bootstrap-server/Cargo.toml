@@ -1,7 +1,8 @@
 [package]
-name = "bootstrap_server"
+name = "bootstrap-server"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+daemonize = "0.5.0"
 protocol = {path = "../protocol"}
