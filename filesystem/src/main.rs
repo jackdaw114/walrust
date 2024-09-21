@@ -9,8 +9,10 @@ struct ConfigOptions{
 }
 
 fn main() -> std::io::Result<()> {
+    //Cal coded
     let mut new_user = UserConfig::default();
     new_user.set_struct();
+    new_user.block_space(3); // creates a text file of 3MB inorder to 'reserve' that amount of space
     let config_dir = config_dir().unwrap(); 
     let config_path: PathBuf = [config_dir.to_str().unwrap(),"walrust.conf"].iter().collect();
     println!("{:?}",config_path);

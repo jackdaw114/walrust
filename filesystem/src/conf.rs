@@ -1,6 +1,6 @@
-//#![allow(dead_code, unused_variables)]
+#![allow(dead_code, unused_variables)]
 
-use std::{fs::File, io::{self, BufRead}, path::PathBuf};
+use std::{fs::File, io::{self, BufRead, Write}, path::PathBuf};
 
 
 #[derive(Debug)]
@@ -28,6 +28,30 @@ impl Default for UserConfig {
 }
 
 impl UserConfig {
+
+    pub fn block_space(&self, file_size_in_mb: usize) {
+        // 1 MB = 1,048,576 bytes
+        let total_bytes = file_size_in_mb * 1_048_576;
+    
+        // Create a shard (string) that we will repeat
+        let text_shard = "0".repeat(1_048_576); // 1 MB worth of "0"s
+        let mut data_file = File::create("space_blocker.txt").expect("creation of space-blocker failed");
+    
+        // Calculate how many full MB shards we can write
+        let full_writes = total_bytes / 1_048_576;
+        
+        // Write full MBs worth of data
+        for _ in 0..full_writes {
+            data_file.write_all(text_shard.as_bytes()).expect("write failed");
+        }
+    
+        // Handle any remaining bytes (if total_bytes is not a perfect multiple of 1 MB)
+        let remaining_bytes = total_bytes % 1_048_576;
+        if remaining_bytes > 0 {
+            let remainder_shard = "0".repeat(remaining_bytes);
+            data_file.write_all(remainder_shard.as_bytes()).expect("write failed");
+        }
+    }
 
     fn check_path(&self, f_path:&str, line_number:usize)-> PathBuf {
         let file_path = PathBuf::from(f_path);
@@ -64,7 +88,7 @@ impl UserConfig {
                             let (key, value) = (key.trim(), value.trim());
                             // println!("key:{:?} || value:{:?}", key, value);
 
-                            // Assigning values to the struct
+                            // Actual assigning of values to the struct
 
                                 match key {
                                     "f_size" => match value.parse::<u128>() {
