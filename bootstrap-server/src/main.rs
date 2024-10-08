@@ -1,11 +1,62 @@
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::{fs::{self, create_dir_all, File, OpenOptions}, net::SocketAddr, path::PathBuf};
 
+use axum::{
+    Router,
+    routing::get,
+    extract::ConnectInfo
+};
 use daemonize::Daemonize;
-use protocol;
+use dirs::data_dir;
+use tower_http::services::ServeDir;
 
 
 
 
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let addr = SocketAddr::from(([0,0,0,0],8000));
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    
+
+    let app = Router::new()
+        .nest_service("/", ServeDir::new("dist"))
+        .route("/test", get(handler));
+    
+    let dir:PathBuf = [data_dir().unwrap().to_str().unwrap(),"walrust","routing_table.txt"].iter().collect();
+    println!("{:?}",dir);
+
+    if let Some(parent_dir) = dir.parent() {
+        // Create directories if they don't exist
+        fs::create_dir_all(parent_dir)?;
+    }
+
+    let routing_table = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .write(true)
+        .open(dir);
+
+
+    axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+    Ok(())
+
+}
+
+#[derive(Clone)]
+struct AppState {
+    local_addr: SocketAddr,
+}
+
+async fn handler(ConnectInfo(remote_addr): ConnectInfo<SocketAddr>) -> String {
+    format!("Client IP: {}",remote_addr.ip())
+}
+
+async fn addToNetwork(){
+     
+}
+
+
+/*
 fn main() -> std::io::Result<()> {
     let finch_dir = "/tmp/finch";
     if let Err(x) = create_dir_all(finch_dir){
@@ -51,3 +102,4 @@ fn main() -> std::io::Result<()> {
 
     Ok(())
 }
+*/
