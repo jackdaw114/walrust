@@ -1,4 +1,5 @@
-use std::{fs::{self, create_dir_all, File, OpenOptions}, net::SocketAddr, path::PathBuf};
+use std::{collections::HashMap, error::Error,  fs::{ create_dir_all,  OpenOptions}, io::{self,BufRead}, net::SocketAddr, path::{Path, PathBuf}};
+
 
 use axum::{
     Router,
@@ -24,17 +25,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     let dir:PathBuf = [data_dir().unwrap().to_str().unwrap(),"walrust","routing_table.txt"].iter().collect();
     println!("{:?}",dir);
+    
+    let routing_table = loadRoutingTable(&dir).map_err(|err| {
+        return err
+    });
+    
+    println!("Parsed data:");
+    for (hash, entry) in routing_table {
+        println!("Hash: {}", hash);
+        println!("  IP: {}", entry.ip);
+        println!("  Port: {}", entry.port);
+        println!("  Details: {}", entry.details);
+        println!(); // Add a blank line between entries
+    }
+    println!("Total entries: {}", routing_table.len());
+    
 
     if let Some(parent_dir) = dir.parent() {
         // Create directories if they don't exist
-        fs::create_dir_all(parent_dir)?;
+        create_dir_all(parent_dir)?;
     }
 
-    let routing_table = OpenOptions::new()
-        .read(true)
-        .create(true)
-        .write(true)
-        .open(dir);
 
 
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
@@ -42,10 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 }
 
-#[derive(Clone)]
-struct AppState {
-    local_addr: SocketAddr,
-}
 
 async fn handler(ConnectInfo(remote_addr): ConnectInfo<SocketAddr>) -> String {
     format!("Client IP: {}",remote_addr.ip())
@@ -56,6 +63,47 @@ async fn addToNetwork(){
 }
 
 
+#[derive(Debug)]
+struct RouteEntry {
+    ip: String,
+    port: u32,
+    role: String, // change this to an enum 
+}
+
+fn loadRoutingTable(filename: &PathBuf) -> io::Result<HashMap<String, RouteEntry>> {
+    let path = Path::new(filename);
+    let file = OpenOptions::new()
+        .read(true)
+        .create(true)
+        .write(true)
+        .open(&path)?;
+    let reader = io::BufReader::new(file);
+
+
+    let mut hashmap = HashMap::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let parts: Vec<&str> = line.split('|').collect();
+        
+        if parts.len() == 4{
+            let hash = parts[0].to_string();
+            let port:u32 = parts[2].parse().expect("routing table has an issue with port numbers");
+            let entry = RouteEntry {
+                ip:parts[1].to_string(),
+                port: port,
+                role: parts[3].to_string()
+            };
+
+            hashmap.insert(hash, entry);
+        }
+        else {
+            panic!("incorrect routing table");
+        }
+    }
+
+    Ok(hashmap)
+}
 /*
 fn main() -> std::io::Result<()> {
     let finch_dir = "/tmp/finch";
