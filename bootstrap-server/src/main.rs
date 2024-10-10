@@ -26,16 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let dir:PathBuf = [data_dir().unwrap().to_str().unwrap(),"walrust","routing_table.txt"].iter().collect();
     println!("{:?}",dir);
     
-    let routing_table = loadRoutingTable(&dir).map_err(|err| {
-        return err
-    });
+    let routing_table = loadRoutingTable(&dir)?;
     
     println!("Parsed data:");
     for (hash, entry) in routing_table {
         println!("Hash: {}", hash);
         println!("  IP: {}", entry.ip);
         println!("  Port: {}", entry.port);
-        println!("  Details: {}", entry.details);
         println!(); // Add a blank line between entries
     }
     println!("Total entries: {}", routing_table.len());
