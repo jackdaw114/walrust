@@ -1,16 +1,20 @@
-use std::{collections::HashMap, error::Error,  fs::{ create_dir_all,  OpenOptions}, io::{self,BufRead}, net::SocketAddr, path::{Path, PathBuf}};
+use std::{collections::HashMap, default, error::Error, fs::{ create_dir_all,  OpenOptions}, io::{self,BufRead}, net::SocketAddr, path::{Path, PathBuf}, sync::{Arc, Mutex}};
 
 
 use axum::{
-    Router,
-    routing::get,
-    extract::ConnectInfo
+    extract::{ConnectInfo, Query}, routing::get, Router
 };
-use daemonize::Daemonize;
 use dirs::data_dir;
+use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
+use serde::Deserialize;
 
-
+#[derive(Debug)]
+struct RouteEntry {
+    ip: String,
+    port: u32,
+    role: String, // change this to an enum 
+}
 
 
 #[tokio::main]
@@ -19,32 +23,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     
 
-    let app = Router::new()
-        .nest_service("/", ServeDir::new("dist"))
-        .route("/test", get(handler));
     
     let dir:PathBuf = [data_dir().unwrap().to_str().unwrap(),"walrust","routing_table.txt"].iter().collect();
     println!("{:?}",dir);
+
+    if let Some(parent_dir) = dir.parent() {
+        // Create directories if they don't exist
+        create_dir_all(parent_dir)?;
+    }
     
-    let routing_table = loadRoutingTable(&dir)?;
+    let routing_table = Arc::new(Mutex::new(loadRoutingTable(&dir)?)) ;
     
-    println!("Parsed data:");
-    for (hash, entry) in routing_table {
+/*    println!("Parsed data:");
+    for (hash, entry) in routing_table.iter() {
         println!("Hash: {}", hash);
         println!("  IP: {}", entry.ip);
         println!("  Port: {}", entry.port);
         println!(); // Add a blank line between entries
     }
     println!("Total entries: {}", routing_table.len());
-    
-
-    if let Some(parent_dir) = dir.parent() {
-        // Create directories if they don't exist
-        create_dir_all(parent_dir)?;
-    }
-
-
-
+    */
+    let app = Router::new()
+        .nest_service("/", ServeDir::new("dist"))
+        .route("/test", get(handler))
+        .route("/join-network", get(add_to_network))
+        .with_state(routing_table);
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     Ok(())
 
@@ -55,17 +58,28 @@ async fn handler(ConnectInfo(remote_addr): ConnectInfo<SocketAddr>) -> String {
     format!("Client IP: {}",remote_addr.ip())
 }
 
-async fn addToNetwork(){
-     
+#[derive(Deserialize)]
+struct JoinParams{
+    port: Option<String>,
+    role: Option<String>
+}
+
+async fn add_to_network(
+    Query(params): Query<JoinParams>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    routing_table:Arc<Mutex<HashMap<String,RouteEntry>>>
+) -> String {
+    let port= params.port.unwrap_or_else(|| "Anonymous".to_string());
+    
+    let route_map = routing_table.lock().unwrap();
+    for (hash,entry) in route_map.iter(){
+        if hash = 
+    }
+    format!("Hello, {}! Your IP address is: {}", port, addr.ip())
 }
 
 
-#[derive(Debug)]
-struct RouteEntry {
-    ip: String,
-    port: u32,
-    role: String, // change this to an enum 
-}
+
 
 fn loadRoutingTable(filename: &PathBuf) -> io::Result<HashMap<String, RouteEntry>> {
     let path = Path::new(filename);
