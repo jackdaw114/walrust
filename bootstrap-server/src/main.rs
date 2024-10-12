@@ -1,11 +1,11 @@
 use std::{collections::HashMap, default, error::Error, fs::{ create_dir_all,  OpenOptions}, io::{self,BufRead}, net::SocketAddr, path::{Path, PathBuf}, sync::{Arc, Mutex}};
 
+use sha1::{Sha1,Digest};
 
 use axum::{
-    extract::{ConnectInfo, Query}, routing::get, Router
+    extract::{ConnectInfo, Query, State}, routing::get, Router
 };
 use dirs::data_dir;
-use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use serde::Deserialize;
 
@@ -30,6 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(parent_dir) = dir.parent() {
         // Create directories if they don't exist
         create_dir_all(parent_dir)?;
+        
     }
     
     let routing_table = Arc::new(Mutex::new(loadRoutingTable(&dir)?)) ;
@@ -55,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 
 async fn handler(ConnectInfo(remote_addr): ConnectInfo<SocketAddr>) -> String {
-    format!("Client IP: {}",remote_addr.ip())
+    format!("Clent IP: {}",remote_addr.ip())
 }
 
 #[derive(Deserialize)]
@@ -67,13 +68,16 @@ struct JoinParams{
 async fn add_to_network(
     Query(params): Query<JoinParams>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    routing_table:Arc<Mutex<HashMap<String,RouteEntry>>>
+    State(routing_table):State<Arc<Mutex<HashMap<String,RouteEntry>>>>
 ) -> String {
     let port= params.port.unwrap_or_else(|| "Anonymous".to_string());
+    let mut hasher = Sha1::new();
     
+    hasher.update(format!("{}{}",addr.ip(),port).as_bytes());
+    let client_hash = hasher.finalize();
     let route_map = routing_table.lock().unwrap();
+    println!("{:?}",client_hash);
     for (hash,entry) in route_map.iter(){
-        // TODO: Check hash params here and then enter it into file
     }
     format!("Hello, {}! Your IP address is: {}", port, addr.ip())
 }

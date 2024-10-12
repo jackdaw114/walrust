@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.7.7", features = ["http2"] }
-digest = "0.10.7"
+sha1 = "0.10.1"
 dirs = "5.0.1"
 hyper = {version="1.4.1", features=["server"]}
 serde = {version="1.0.210",features=["derive"]}
