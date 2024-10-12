@@ -3,7 +3,7 @@ use std::{collections::{BTreeMap}, fs::{ create_dir_all,  OpenOptions}, io::{sel
 use hyper::{ Error, StatusCode};
 use sha1::{Sha1,Digest};
 use std::any::type_name;
-use axum::{extract::{ConnectInfo, Multipart, Query, State}, response::IntoResponse, routing::{get, post}, Router
+use axum::{extract::{ConnectInfo, Multipart, Query, State}, Json,response::IntoResponse, routing::{get, post}, Router
 };
 use dirs::data_dir;
 use tower_http::services::ServeDir;
@@ -28,6 +28,7 @@ struct JoinParams{
     port: Option<String>,
     role: Option<String>
 }
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -61,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/test", get(handler))
         .route("/join-network", get(add_to_network))
         .route("/add-file", post(upload_file))
+        .route("/a;sdlfj;alf", post())
         .with_state(routing_table);
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     Ok(())
