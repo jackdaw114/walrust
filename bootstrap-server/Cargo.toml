@@ -4,11 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.7.7", features = ["http2"] }
+axum = { version = "0.7.7", features = ["http2","multipart"] }
 sha1 = "0.10.1"
 dirs = "5.0.1"
-hyper = {version="1.4.1", features=["server"]}
+hyper = {version="1.4.1", features=["server","client"]}
 serde = {version="1.0.210",features=["derive"]}
 serde_json = "1.0.128"
 tokio = {version="1.40.0",features=["full"]}
 tower-http = {version="0.6.1",features=["full"]}
+hex = "0.4.3"
+itertools = "0.13.0"
+hyper-tls = "0.6.0"
+hyper-util = { version = "0.1", features = ["full"]}
+ureq = "2.10.1"
