@@ -1,26 +1,28 @@
 use std::{collections::{BTreeMap}, fs::{ create_dir_all,  OpenOptions}, io::{self,BufRead}, net::SocketAddr, path::{Path, PathBuf}, sync::{Arc, Mutex}};
 
 use hyper::{ Error, StatusCode};
+use serde_json::Value;
 use sha1::{Sha1,Digest};
 use std::any::type_name;
-use axum::{extract::{ConnectInfo, Multipart, Query, State}, Json,response::IntoResponse, routing::{get, post}, Router
+use axum::{body::Bytes, extract::{ConnectInfo, Multipart, Query, State}, http::response, response::IntoResponse, routing::{get, post}, Json, Router
 };
 use dirs::data_dir;
 use tower_http::services::ServeDir;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 struct RouteEntry {
     ip: String,
     port: u32,
     node_name: String, // change this to an enum 
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize,Debug)]
 struct FileParams{
     hash:Option<String>,
-    file_name: Option<String>
+    file_name: Option<String>,
+    node_name: Option<String>
 }
 
 #[derive(Deserialize)]
@@ -35,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = SocketAddr::from(([0,0,0,0],8000));
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     
-
     
     let dir:PathBuf = [data_dir().unwrap().to_str().unwrap(),"walrust","routing_table.txt"].iter().collect();
     println!("{:?}",dir);
@@ -62,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .route("/test", get(handler))
         .route("/join-network", get(add_to_network))
         .route("/add-file", post(upload_file))
-        .route("/a;sdlfj;alf", post())
+        .route("/get-file", post(get_file))
         .with_state(routing_table);
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     Ok(())
@@ -75,9 +76,6 @@ async fn handler(ConnectInfo(remote_addr): ConnectInfo<SocketAddr>) -> String {
 }
 
 
-fn type_of<T>(_: T) -> &'static str {
-    type_name::<T>()
-}
 
 async fn add_to_network(
     Query(params): Query<JoinParams>,
@@ -90,8 +88,8 @@ async fn add_to_network(
     hasher.update(format!("{}{}",addr.ip(),port).as_bytes());
     let result = hasher.finalize();
 
-    let client_hash = hex::encode(result);
     let mut route_map = routing_table.lock().unwrap();
+    let client_hash = hex::encode(result);
     for (hash,entry) in route_map.iter(){
         println!("{}",hash);
         if client_hash == hash.to_string(){
@@ -152,6 +150,13 @@ fn loadRoutingTable(filename: &PathBuf) -> io::Result<BTreeMap<String, RouteEntr
     Ok(hashmap)
 }
 
+#[derive(Serialize)]
+struct FileDetails{
+    scope:String,
+    file_name:String,
+    data: String
+}
+
 async fn upload_file(
     State(routing_table):State<Arc<Mutex<BTreeMap<String,RouteEntry>>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -169,19 +174,21 @@ async fn upload_file(
         
          
         let mut hasher = Sha1::new();
-         
-        hasher.update(format!("{}{}",addr.ip(),file_name).as_bytes());
+        println!("before hashing file entry :{}{}",addr.ip().to_string(),file_name);
+        hasher.update(format!("{}{}",addr.ip().to_string(),file_name).as_bytes());
         
         let result = hasher.finalize();
 
         let file_hash = hex::encode(result);
+        println!("hashed file in db hash {}",file_hash);
         let mut route_map = routing_table.lock().unwrap();
         let mut change = None; 
         for (hash,entry) in route_map.iter(){
-            println!("{}",hash);
+            println!("{},Entry:{:?}",hash,entry);
+            println!("File hash: {}",file_hash);
             if file_hash == hash.to_string(){
                 //update file
-                break;
+                return (StatusCode::OK,format!("File '{}' uploaded successfully", file_name));
             }
             if entry.port == 0{
                 continue;
@@ -189,29 +196,55 @@ async fn upload_file(
             if file_hash > hash.to_string(){
                 // store file in corresponding route
                 
-                change = Some((file_hash, RouteEntry{
+                println!("inside option {:?}",entry);
+                change = Some((file_hash.clone(), RouteEntry{
                     ip: format!("{}:{}",entry.ip,entry.port),
                     port: 0,
                     node_name: addr.ip().to_string()
                 }));
                 let url = format!("{}:{}/add-file",entry.ip, entry.port);
+
                 println!("{}",url);
 
                 let res = ureq::post(&url)
-                    .send_bytes(&data);
+                    .send_json(FileDetails{
+                        scope: addr.ip().to_string(),
+                        file_name:file_name.to_string(),
+                        data:hex::encode(&data)
+                    });
                 println!("Response sent by node: {:?}",res);
 
                 break;
             }
+
         }
         match change{
             Some((key,value)) =>{
                 route_map.insert(key, value);
             },
-            None => {}
+            None => {
+                let temp_entry = route_map.iter().next().unwrap().1.clone();
+                println!("inside none of change {:?}",temp_entry);
+                route_map.insert(file_hash, RouteEntry{
+                    ip: format!("{}:{}",temp_entry.ip,temp_entry.port),
+                    port: 0,
+                    node_name: addr.ip().to_string()
+                });
+                let url = format!("http://{}:{}/add-file",temp_entry.ip, temp_entry.port);
+
+                println!("{}",url);
+                
+                
+                let res = ureq::post(&url)
+                    .send_json(FileDetails{
+                        scope: addr.ip().to_string(),
+                        file_name:file_name.to_string(),
+                        data:String::from_utf8(data.to_vec()).unwrap()
+                    }).unwrap();
+                println!("Response sent by node: {:?}",res);
+            }
         }
 
-        println!("{}",String::from_utf8_lossy(&data));
         (StatusCode::OK,format!("File '{}' uploaded successfully", file_name))
     } else {
         (StatusCode::BAD_REQUEST,"No file uploaded".into())
@@ -219,23 +252,49 @@ async fn upload_file(
 }
 
 async fn get_file(
-    Query(params):Query<FileParams>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(routing_table):State<Arc<Mutex<BTreeMap<String,RouteEntry>>>>
-    ) ->String{
+    State(routing_table):State<Arc<Mutex<BTreeMap<String,RouteEntry>>>>,
+    Json(params):Json<FileParams>,
+    ) ->impl IntoResponse{
+    println!("{:?}",params);
     let mut route_map = routing_table.lock().unwrap(); 
     let file_name = params.file_name.unwrap_or_else(|| "Default.txt".to_string());
+    let scope = params.node_name.unwrap_or_else(|| "Default.txt".to_string());
     let mut hasher = Sha1::new();
-    hasher.update(format!("{}{}",addr.ip(),file_name));
+
+    println!("before hashing file entry :{}{}",scope,file_name);
+    hasher.update(format!("{}{}",scope,file_name).as_bytes());
     let result = hasher.finalize();
     let file_hash = hex::encode(result);
+    println!("comp hash {}",file_hash);
     for (hash,entry) in route_map.iter(){
-        println!("{}",hash);
+        println!("get file {}",hash);
         if hash.to_string() == file_hash{
-            let res = ureq::get(&entry.ip).call().unwrap();
-            return res.into_string().unwrap();
+            println!("http://{}",&entry.ip);
+
+            let res = ureq::post(&format!("http://{}/get-file",&entry.ip))
+                .send_json(FileDetails{
+                    scope:entry.node_name.clone(),
+                    file_name:file_name.clone(),
+                    data:"None".to_string()
+                }).unwrap();
+                
+                
+                println!("Response sent by node: {:?}",res);
+                if res.has("Content-Length"){
+                    let len:usize= res.header("Content-Length")
+                        .unwrap()
+                        .parse().unwrap();
+                    let mut bytes: Vec<u8> = Vec::with_capacity(len);
+                    res.into_reader()
+                        .read_to_end(&mut bytes).unwrap();
+
+                    let ret_data:Value = serde_json::from_str(&String::from_utf8(bytes).unwrap()).unwrap();
+                    return Json(ret_data);
+                }
+                break;
         }
     }
-    "File not found".to_string()
+    Json(Value::default())
 }
 

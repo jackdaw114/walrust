@@ -1,36 +1,60 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Upload Example</title>
-</head>
-<body>
-    <h1>Upload a File</h1>
-    <form id="uploadForm">
-        <input type="file" id="fileInput" required>
-        <button type="submit">Send File</button>
-    </form>
-
+    <title>File Submission</title>
     <script>
-        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+        async function submitJson(event) {
             event.preventDefault(); // Prevent the default form submission
 
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
+            const fileName = document.getElementById('file_name').value;
+            const nodeName = document.getElementById('node_name').value;
 
-            if (file) {
-                const formData = new FormData();
-                formData.append('file', file);
+            const data = {
+                file_name: fileName,
+                node_name: nodeName,
+            };
 
-                // Send the file to a server using fetch (replace 'your-server-endpoint' with your actual endpoint)
+            try {
+                const response = await fetch('get-file', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('JSON submitted successfully:', result);
+                    alert('JSON submitted successfully!');
+                } else {
+                    console.error('Error submitting JSON:', response.statusText);
+                    alert('Error submitting JSON');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting JSON');
+            }
+        }
+
+        function submitFile(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            const form = document.getElementById('fileForm');
+            const formData = new FormData(form);
+            const fileInput = document.getElementById('fileUpload');
+
+            if (fileInput.files.length > 0) {
                 fetch('/add-file', {
                     method: 'POST',
                     body: formData
                 })
                 .then(response => {
                     if (response.ok) {
-                        return response.json(); // Assuming the server responds with JSON
+                        return response;
                     }
                     throw new Error('Network response was not ok.');
                 })
@@ -45,7 +69,29 @@
             } else {
                 alert('Please select a file to upload.');
             }
-        });
+        }
     </script>
+</head>
+<body>
+
+    <h1>Submit File Details</h1>
+    <form id="jsonForm" onsubmit="submitJson(event)">
+        <label for="file_name">File Name:</label>
+        <input type="text" id="file_name" name="file_name" required><br><br>
+        
+        <label for="node_name">Node Name:</label>
+        <input type="text" id="node_name" name="node_name" required><br><br>
+        
+        <button type="submit">Submit JSON</button>
+    </form>
+
+    <h2>Upload File</h2>
+    <form id="fileForm" onsubmit="submitFile(event)">
+        <label for="fileUpload">Select a file:</label>
+        <input type="file" id="fileUpload" name="fileUpload" required><br><br>
+        
+        <button type="submit">Upload File</button>
+    </form>
+
 </body>
 </html>

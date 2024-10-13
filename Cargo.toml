@@ -1,2 +1,2 @@
 [workspace]
-members = ["bootstrap-server", "filesystem", "protocol"]
+members = ["bootstrap-server", "filesystem", "node", "protocol"]
