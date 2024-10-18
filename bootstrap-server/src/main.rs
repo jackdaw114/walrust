@@ -11,7 +11,7 @@ use tower_http::services::ServeDir;
 use serde::{Deserialize, Serialize};
 
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,Serialize)]
 struct RouteEntry {
     ip: String,
     port: u32,
@@ -49,21 +49,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     let routing_table = Arc::new(Mutex::new(loadRoutingTable(&dir)?)) ;
     
-/*    println!("Parsed data:");
-    for (hash, entry) in routing_table.iter() {
-        println!("Hash: {}", hash);
-        println!("  IP: {}", entry.ip);
-        println!("  Port: {}", entry.port);
-        println!(); // Add a blank line between entries
-    }
-    println!("Total entries: {}", routing_table.len());
-    */
     let app = Router::new()
         .nest_service("/", ServeDir::new("dist"))
         .route("/test", get(handler))
         .route("/join-network", get(add_to_network))
         .route("/add-file", post(upload_file))
         .route("/get-file", post(get_file))
+        .route("/get-dir-structure", get(get_dir_structure))
         .with_state(routing_table);
     axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     Ok(())
@@ -223,7 +215,7 @@ async fn upload_file(
                 route_map.insert(key, value);
             },
             None => {
-                let temp_entry = route_map.iter().next().unwrap().1.clone();
+                let temp_entry = route_map.iter().find(|&(_,entry)| entry.port >0).unwrap().1.clone();
                 println!("inside none of change {:?}",temp_entry);
                 route_map.insert(file_hash, RouteEntry{
                     ip: format!("{}:{}",temp_entry.ip,temp_entry.port),
@@ -296,5 +288,16 @@ async fn get_file(
         }
     }
     Json(Value::default())
+}
+
+async fn get_dir_structure(
+    State(routing_table):State<Arc<Mutex<BTreeMap<String,RouteEntry>>>>
+    ) -> impl IntoResponse{
+    let lock = routing_table.lock().unwrap();
+    let filtered_map: BTreeMap<String, RouteEntry> = lock.iter()
+            .filter(|&(_, value)| value.port == 0)
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+    (StatusCode::OK,serde_json::to_string(&filtered_map).unwrap())
 }
 
